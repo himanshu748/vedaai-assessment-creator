@@ -1,3 +1,6 @@
+import dns from 'dns';
+dns.setDefaultResultOrder('ipv4first');
+
 import { ISection, IQuestionType } from '../models/Assignment';
 
 export async function generateQuestionPaper(params: {
@@ -132,7 +135,105 @@ function getOfflineMockQuestions(params: {
   const sections: ISection[] = [];
   const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
-  // Sample templates depending on subject (Science, English, Math, Generic)
+  const mockMCQPool = [
+    {
+      concept: "Atoms and Molecules",
+      question: "Which of the following laws states that mass can neither be created nor destroyed in a chemical reaction?",
+      options: [
+        "Law of conservation of mass",
+        "Law of constant proportions",
+        "Dalton's atomic theory",
+        "Law of conservation of energy"
+      ],
+      correctOptionIdx: 0,
+      explanation: "The Law of Conservation of Mass states that mass is neither created nor destroyed in a chemical reaction. Hence, the total mass of the reactants equals the total mass of the products."
+    },
+    {
+      concept: "Definite proportions",
+      question: "In a chemical substance, the elements are always present in definite proportions by mass. This is known as the:",
+      options: [
+        "Law of conservation of mass",
+        "Law of constant proportions",
+        "Dalton's atomic theory",
+        "Avogadro's law"
+      ],
+      correctOptionIdx: 1,
+      explanation: "The Law of Constant Proportions (definite proportions) states that in a chemical substance, the elements are always present in definite proportions by mass regardless of source."
+    },
+    {
+      concept: "Dalton",
+      question: "According to Dalton's atomic theory, what is the smallest indivisible particle of matter that can take part in a chemical reaction?",
+      options: [
+        "Molecule",
+        "Atom",
+        "Proton",
+        "Electron"
+      ],
+      correctOptionIdx: 1,
+      explanation: "According to Dalton's atomic theory, all matter is made of tiny, indivisible particles called atoms, which can neither be created nor destroyed."
+    },
+    {
+      concept: "Molecular mass",
+      question: "How is the molecular mass of a chemical substance calculated?",
+      options: [
+        "By dividing the atomic mass of all constituents",
+        "By subtracting the mass of the lightest atom",
+        "As the sum of atomic masses of all atoms in a molecule",
+        "By multiplying the number of atoms by the atomic number"
+      ],
+      correctOptionIdx: 2,
+      explanation: "The molecular mass of a substance is the sum of the atomic masses of all the atoms in a single molecule of that substance."
+    },
+    {
+      concept: "Electrolysis",
+      question: "During the electrolysis of water, at which electrode is hydrogen gas liberated?",
+      options: [
+        "Anode",
+        "Cathode",
+        "Both electrodes",
+        "Neither electrode"
+      ],
+      correctOptionIdx: 1,
+      explanation: "Hydrogen ions (H+) are positively charged and migrate towards the negatively charged electrode (Cathode) where they gain electrons and form hydrogen gas."
+    },
+    {
+      concept: "Electroplating",
+      question: "What is the primary purpose of electroplating metals like iron with chromium in consumer products?",
+      options: [
+        "To increase electrical conductivity",
+        "To prevent corrosion and improve appearance",
+        "To make the metal lighter in weight",
+        "To lower the melting point of the metal"
+      ],
+      correctOptionIdx: 1,
+      explanation: "Electroplating chromium onto iron provides a shiny appearance and prevents corrosion/rusting because chromium does not corrode easily."
+    },
+    {
+      concept: "Inertia",
+      question: "The property of an object to resist any change in its state of rest or of uniform motion is called:",
+      options: [
+        "Force",
+        "Momentum",
+        "Inertia",
+        "Acceleration"
+      ],
+      correctOptionIdx: 2,
+      explanation: "Inertia is the inherent property of an object by virtue of which it resists any change in its state of rest or uniform motion."
+    },
+    {
+      concept: "Second law",
+      question: "Which of the following mathematical equations represents Newton's Second Law of Motion?",
+      options: [
+        "F = m/a",
+        "F = ma",
+        "F = m + a",
+        "F = p/t"
+      ],
+      correctOptionIdx: 1,
+      explanation: "Newton's Second Law states that the force applied is directly proportional to the rate of change of momentum, resulting in F = ma."
+    }
+  ];
+
   const isScience = /science|physic|chem|bio|electr/i.test(params.subject || '');
   const isEnglish = /english|lit|grammar/i.test(params.subject || '');
 
@@ -140,7 +241,6 @@ function getOfflineMockQuestions(params: {
     const secLetter = alphabet[index];
     const questionsList: any[] = [];
 
-    // Helper to generate a question text based on subject, type, and source text if any
     for (let i = 0; i < qt.count; i++) {
       const qNum = i + 1;
       let text = '';
@@ -150,81 +250,93 @@ function getOfflineMockQuestions(params: {
       const difficulty = difficulties[(qNum + index) % 3];
 
       if (qt.type.toLowerCase().includes('multiple choice') || qt.type.toLowerCase().includes('mcq')) {
-        options = [
-          'Option A - High relevance statement',
-          'Option B - Moderate relevance statement',
-          'Option C - Distractor statement',
-          'Option D - None of the above'
-        ];
+        let mcqItem = mockMCQPool[(qNum + index + i) % mockMCQPool.length];
         
-        if (isScience) {
-          text = `Which of the following describes a key process in ${params.subject} for ${params.gradeClass} (related to ${params.title})?`;
-          options = [
-            'Deposition of metal ions at the cathode during electrolysis',
-            'Flow of electrons in a non-conductive medium',
-            'Reduction of oxygen ions at the anode without current',
-            'Electrostatic insulation of conducting copper wires'
-          ];
-          answer = 'Option A is correct. During electrolysis, metal ions gain electrons at the cathode and deposit as solid metal (e.g. copper plating).';
-        } else if (isEnglish) {
-          text = `Identify the correct usage of prepositions in the sentence related to ${params.title}:`;
-          options = [
-            'He is proficient in English grammar.',
-            'He is proficient with English grammar.',
-            'He is proficient at English grammar.',
-            'He is proficient for English grammar.'
-          ];
-          answer = 'Option A is correct. "Proficient in" is the standard idiomatic expression in English grammar.';
-        } else {
-          text = `Select the most accurate statement regarding ${params.title} under ${params.subject}:`;
-          answer = 'Option A is correct because it follows standard textbook definitions.';
+        // Keyword-based question selection
+        const matched = mockMCQPool.find(item => 
+          new RegExp(item.concept, 'i').test(params.title || '') ||
+          new RegExp(item.concept, 'i').test(params.subject || '') ||
+          (params.fileTextContext && new RegExp(item.concept, 'i').test(params.fileTextContext))
+        );
+
+        if (matched) {
+          const matchedIdx = mockMCQPool.indexOf(matched);
+          mcqItem = mockMCQPool[(matchedIdx + i) % mockMCQPool.length];
+        } else if (params.fileTextContext) {
+          const sentences = params.fileTextContext
+            .split(/[.?!]/)
+            .map(s => s.trim())
+            .filter(s => s.length > 20 && s.length < 150);
+          
+          if (sentences.length > 0) {
+            const sentenceIndex = (qNum + index + i) % sentences.length;
+            const snippet = sentences[sentenceIndex];
+            mcqItem = {
+              concept: "custom",
+              question: `Regarding the concept "${snippet}", which of the following statements is correct?`,
+              options: [
+                `It represents a valid factual mechanism as stated in the textbook.`,
+                `It is an invalid statement that contradicts the basic subject rules.`,
+                `It is a subjective opinion with no logical basis or references.`,
+                `It has been proven false by modern laboratory observations.`
+              ],
+              correctOptionIdx: 0,
+              explanation: `The textbook references indicate that "${snippet}" is indeed a correct statement.`
+            };
+          }
         }
+
+        // Shuffle the options to make sure correct option is NOT always Option A
+        const targetCorrectIdx = (qNum + index + i) % 4; // Varies correct option between A (0), B (1), C (2), D (3)
+        const originalOptions = [...mcqItem.options];
+        const correctText = originalOptions[mcqItem.correctOptionIdx];
+        
+        const finalOptions = [...originalOptions];
+        finalOptions[mcqItem.correctOptionIdx] = finalOptions[targetCorrectIdx];
+        finalOptions[targetCorrectIdx] = correctText;
+        
+        const optionLetter = ['A', 'B', 'C', 'D'][targetCorrectIdx];
+        text = mcqItem.question;
+        options = finalOptions;
+        answer = `Option ${optionLetter} is correct. ${mcqItem.explanation}`;
+
       } else if (qt.type.toLowerCase().includes('true') || qt.type.toLowerCase().includes('false')) {
+        const isTrue = (qNum + index) % 2 === 0;
         if (isScience) {
-          text = `State True or False: Electrolysis can occur in pure distilled water without any dissolved salts.`;
-          answer = 'False. Pure distilled water does not contain free-moving ions and is a poor conductor of electricity; a salt or acid must be added to enable electrolysis.';
+          text = isTrue
+            ? `State True or False: Dalton's atomic theory proposed that atoms are indivisible particles.`
+            : `State True or False: The molecular mass of water (H2O) is exactly 10 u.`;
+          answer = isTrue
+            ? `True. Dalton proposed that atoms are indivisible particles of matter that cannot be created or destroyed.`
+            : `False. The molecular mass of water is 18 u (1*2 + 16).`;
         } else {
-          text = `State True or False: The primary objective of ${params.title} is to summarize the core topics of ${params.subject}.`;
-          answer = 'True. It aligns directly with the curriculum syllabus.';
+          text = `State True or False: The primary objective of "${params.title}" is to cover the core curriculum.`;
+          answer = isTrue ? `True. It aligns directly with the curriculum guides.` : `False. It is a supplementary assessment.`;
         }
       } else if (qt.type.toLowerCase().includes('short')) {
         if (isScience) {
-          text = `Explain the process of electroplating and list two industrial applications.`;
-          answer = 'Electroplating is the deposition of a metal layer onto another surface using an electric current. Applications: 1) Prevention of corrosion (e.g., chrome plating on iron parts), 2) Aesthetic improvement (e.g., silver/gold plating on jewelry).';
+          if (qNum % 2 === 0) {
+            text = `Explain the difference between atoms and molecules with suitable examples.`;
+            answer = `An atom is the smallest unit of an element that retains its properties (e.g. O, H), whereas a molecule is formed by chemical combination of two or more atoms (e.g. O2, H2O).`;
+          } else {
+            text = `State the Law of Conservation of Mass and explain its significance.`;
+            answer = `The Law of Conservation of Mass states that mass can neither be created nor destroyed in a chemical reaction. This means the mass of reactants equals the mass of products.`;
+          }
         } else if (isEnglish) {
           text = `What is the significance of the central theme in the text of ${params.title}?`;
           answer = 'The central theme establishes the tone and structural elements, allowing readers to connect individual narrative pieces back to a unified concept.';
         } else {
-          text = `Describe the core concepts of ${params.title} under the topic of ${params.subject}.`;
+          text = `Describe the core concepts of "${params.title}" in the context of ${params.subject}.`;
           answer = 'The core concepts involve definition of terms, analysis of structures, and application of formulas as described in the curriculum guides.';
         }
       } else {
         // Long / general questions
         if (isScience) {
           text = `Describe in detail the electrolysis of copper sulfate solution. Detail what reactions occur at the cathode and anode, and draw conclusions about metal purification.`;
-          answer = 'During electrolysis of CuSO4 with copper electrodes: At the cathode, copper ions are reduced: Cu²⁺ + 2e⁻ -> Cu (deposit). At the anode, copper is oxidized: Cu -> Cu²⁺ + 2e⁻. Impure copper at the anode dissolves while pure copper deposits at the cathode, widely used in industrial copper purification.';
+          answer = 'During electrolysis of CuSO4 with copper electrodes: At the cathode, copper ions are reduced: Cu2+ + 2e- -> Cu (deposit). At the anode, copper is oxidized: Cu -> Cu2+ + 2e-. Impure copper at the anode dissolves while pure copper deposits at the cathode, widely used in industrial copper purification.';
         } else {
-          text = `Write a comprehensive essay outlining the historical development and modern applications of ${params.title} in the context of ${params.subject}.`;
+          text = `Write a comprehensive essay outlining the historical development and modern applications of "${params.title}" in the context of ${params.subject}.`;
           answer = 'This is a long answer question requiring students to describe development, explain key principles, list modern applications, and evaluate benefits and limitations with real-world examples.';
-        }
-      }
-
-      // If source file text context exists, try to customize the question text using snippets from it!
-      if (params.fileTextContext) {
-        const sentences = params.fileTextContext
-          .split(/[.?!]/)
-          .map(s => s.trim())
-          .filter(s => s.length > 20 && s.length < 150);
-        
-        if (sentences.length > 0) {
-          const sentenceIndex = (qNum + index) % sentences.length;
-          const snippet = sentences[sentenceIndex];
-          
-          if (qt.type.toLowerCase().includes('multiple choice')) {
-            text = `Regarding the concept "${snippet}", which of the following statements is correct?`;
-          } else {
-            text = `Explain the following concept: "${snippet}". What are its primary implications in this subject area?`;
-          }
         }
       }
 
