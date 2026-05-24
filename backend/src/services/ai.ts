@@ -13,7 +13,7 @@ export async function generateQuestionPaper(params: {
 }): Promise<ISection[]> {
   const hfToken = process.env.HF_TOKEN || '';
   const model = 'Qwen/Qwen2.5-72B-Instruct';
-  const url = `https://router.huggingface.co/models/${model}`;
+  const url = 'https://router.huggingface.co/v1/chat/completions';
 
   // Build the list of question types requested
   const typesDescription = params.questionTypes
@@ -62,10 +62,7 @@ Ensure that:
 3. Every question must have a difficulty tag ('Easy', 'Moderate', or 'Hard') and an answer/solution.
 4. Output must be raw valid JSON containing the "sections" array.`;
 
-  // Combine prompts for the model
-  const fullPrompt = `<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n${systemPrompt}<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n${userPrompt}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n`;
-
-  console.log(`Sending prompt to Hugging Face model ${model}...`);
+  console.log(`Sending chat completion request to Hugging Face model ${model}...`);
 
   try {
     const response = await fetch(url, {
@@ -75,12 +72,13 @@ Ensure that:
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        inputs: fullPrompt,
-        parameters: {
-          max_new_tokens: 3000,
-          temperature: 0.2,
-          return_full_text: false
-        }
+        model: model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+        max_tokens: 3000,
+        temperature: 0.2
       })
     });
 
@@ -91,15 +89,14 @@ Ensure that:
 
     const result = await response.json() as any;
     let generatedText = '';
-    if (Array.isArray(result) && result[0]?.generated_text) {
-      generatedText = result[0].generated_text.trim();
-    } else if (result?.generated_text) {
-      generatedText = result.generated_text.trim();
+    if (result?.choices?.[0]?.message?.content) {
+      generatedText = result.choices[0].message.content.trim();
     } else {
       throw new Error(`Unexpected Hugging Face response structure: ${JSON.stringify(result)}`);
     }
 
     console.log("Raw LLM output received.");
+    console.log("Raw LLM text:", generatedText);
 
     // Clean JSON output in case LLM wrapped it in markdown code blocks or added conversational text
     let jsonString = generatedText;
@@ -115,7 +112,7 @@ Ensure that:
     if (!parsed.sections || !Array.isArray(parsed.sections)) {
       throw new Error("Parsed JSON does not contain 'sections' array");
     }
-    return parsed.sections as ISection[];
+    return postProcessSections(parsed.sections as ISection[]);
   } catch (error: any) {
     console.error("Detailed Hugging Face API Error:", error, "\nCause:", error.cause, "\nStack:", error.stack);
     console.warn("Hugging Face API failed, switching to offline fallback question generator:", error.message || error);
@@ -356,6 +353,90 @@ function getOfflineMockQuestions(params: {
     });
   });
 
+  return sections;
+}
+
+function postProcessSections(sections: ISection[]): ISection[] {
+  for (const section of sections) {
+    if (!section.questions || !Array.isArray(section.questions)) continue;
+    
+    for (const question of section.questions) {
+      if (question.options && Array.isArray(question.options) && question.options.length > 0) {
+        const options = question.options.map(o => String(o).trim());
+        const originalAnswer = String(question.answer || '').trim();
+        
+        let correctIdx = -1;
+        
+        for (let i = 0; i < options.length; i++) {
+          const opt = options[i];
+          if (originalAnswer.toLowerCase() === opt.toLowerCase()) {
+            correctIdx = i;
+            break;
+          }
+        }
+        
+        if (correctIdx === -1) {
+          const letterMatch = originalAnswer.match(/^(?:Option\s+)?([A-D])\b/i);
+          if (letterMatch) {
+            const letter = letterMatch[1].toUpperCase();
+            correctIdx = letter.charCodeAt(0) - 65;
+          }
+        }
+        
+        if (correctIdx === -1) {
+          const sortedOptIndices = options
+            .map((opt, idx) => ({ opt, idx }))
+            .sort((a, b) => b.opt.length - a.opt.length);
+            
+          for (const item of sortedOptIndices) {
+            if (item.opt.length > 0 && originalAnswer.toLowerCase().includes(item.opt.toLowerCase())) {
+              correctIdx = item.idx;
+              break;
+            }
+          }
+        }
+
+        if (correctIdx === -1) {
+          correctIdx = 0;
+        }
+
+        const correctOptionText = options[correctIdx];
+
+        const shuffledOptions = [...options];
+        for (let i = shuffledOptions.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [shuffledOptions[i], shuffledOptions[j]] = [shuffledOptions[j], shuffledOptions[i]];
+        }
+
+        let newCorrectIdx = shuffledOptions.indexOf(correctOptionText);
+        if (newCorrectIdx === -1) {
+          newCorrectIdx = 0;
+          shuffledOptions[0] = correctOptionText;
+        }
+
+        const optionLetter = ['A', 'B', 'C', 'D'][newCorrectIdx];
+        
+        let explanation = originalAnswer;
+        explanation = explanation.replace(/^(?:Option\s+)?[A-D]\b(?:\s*is\s*correct)?[.:\-\s]*/i, '').trim();
+        if (explanation.toLowerCase().startsWith(correctOptionText.toLowerCase())) {
+          explanation = explanation.substring(correctOptionText.length).trim();
+        }
+        explanation = explanation.replace(/^[.:\-\s,;]*/, '').trim();
+
+        question.options = shuffledOptions;
+        question.answer = `Option ${optionLetter} is correct: ${correctOptionText}.${explanation ? ' ' + explanation : ''}`;
+      } else {
+        if (question.text) {
+          question.text = question.text
+            .replace(/^(?:Based\s+on\s+the\s+uploaded\s+text\s+context|According\s+to\s+the\s+reference\s+document|With\s+reference\s+to\s+the\s+uploaded\s+text|From\s+the\s+context|Based\s+on\s+the\s+provided\s+text)[,:\-\s]*/i, '')
+            .trim();
+          if (question.text.length > 0) {
+            question.text = question.text.charAt(0).toUpperCase() + question.text.slice(1);
+          }
+        }
+      }
+    }
+  }
   return sections;
 }
 
