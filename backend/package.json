@@ -1,6 +1,9 @@
 {
   "name": "vedaai-backend",
   "version": "1.0.0",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "description": "Backend for VedaAI Assessment Creator",
   "main": "dist/server.js",
   "scripts": {
@@ -8,7 +11,8 @@
     "start": "node dist/server.js",
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "test-ai": "ts-node-dev --transpile-only src/test_ai.ts",
-    "test-pdf": "ts-node-dev --transpile-only src/test_pdf.ts"
+    "test-pdf": "ts-node-dev --transpile-only src/test_pdf.ts",
+    "connect-chrome": "ts-node-dev --transpile-only src/connect_chrome.ts"
   },
   "dependencies": {
     "bullmq": "^5.8.1",
@@ -20,6 +24,7 @@
     "multer": "^1.4.5-lts.1",
     "pdf-parse": "^1.1.1",
     "pdfkit": "^0.15.0",
+    "playwright-core": "^1.60.0",
     "socket.io": "^4.7.5"
   },
   "devDependencies": {
