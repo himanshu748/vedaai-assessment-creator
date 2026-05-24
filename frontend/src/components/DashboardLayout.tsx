@@ -10,7 +10,8 @@ import {
   Wand2, 
   Menu, 
   X, 
-  GraduationCap
+  GraduationCap,
+  Users
 } from 'lucide-react';
 
 interface SidebarItem {
@@ -21,9 +22,10 @@ interface SidebarItem {
 
 const sidebarItems: SidebarItem[] = [
   { name: 'Home', href: '/', icon: Home },
+  { name: 'My Groups', href: '/groups', icon: Users },
   { name: 'Assignments', href: '/assignments', icon: FileText },
-  { name: 'Library', href: '/library', icon: Library },
-  { name: 'AI Toolkit', href: '/ai-toolkit', icon: Wand2 },
+  { name: 'AI Teacher\'s Toolkit', href: '/ai-toolkit', icon: Wand2 },
+  { name: 'My Library', href: '/library', icon: Library },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
