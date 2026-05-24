@@ -114,6 +114,7 @@ Ensure that:
     }
     return parsed.sections as ISection[];
   } catch (error: any) {
+    console.error("Detailed Hugging Face API Error:", error, "\nCause:", error.cause, "\nStack:", error.stack);
     console.warn("Hugging Face API failed, switching to offline fallback question generator:", error.message || error);
     return getOfflineMockQuestions(params);
   }
