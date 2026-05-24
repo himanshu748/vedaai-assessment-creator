@@ -21,6 +21,8 @@ export async function generateQuestionPaper(params: {
   const systemPrompt = `You are an expert school teacher and exam creator. Your task is to generate a professional question paper in JSON format.
 You MUST output ONLY a valid JSON object. Do not include markdown code block syntax (like \`\`\`json) or any conversational text. Return only the raw JSON.
 
+CRITICAL INSTRUCTION: Do NOT include phrases like "Based on the uploaded text context:", "According to the reference document:", "With reference to the uploaded text:", "From the context:", or similar meta-references in the question text. Formulate questions directly and naturally as if they are in a real exam paper (e.g. "What is the relation between atoms and molecules?" instead of "Based on the reference text, what is the relation between atoms and molecules?").
+
 The JSON schema MUST exactly match:
 {
   "sections": [
@@ -218,9 +220,9 @@ function getOfflineMockQuestions(params: {
           const snippet = sentences[sentenceIndex];
           
           if (qt.type.toLowerCase().includes('multiple choice')) {
-            text = `Based on the uploaded text context: "${snippet}...", which of the following is correct?`;
+            text = `Regarding the concept "${snippet}", which of the following statements is correct?`;
           } else {
-            text = `With reference to the uploaded document text context ("${snippet}"), answer the following question:`;
+            text = `Explain the following concept: "${snippet}". What are its primary implications in this subject area?`;
           }
         }
       }
