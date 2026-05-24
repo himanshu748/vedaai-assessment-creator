@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAssignmentStore, IQuestionType } from '../../store/useAssignmentStore';
 import DashboardLayout from '../../components/DashboardLayout';
@@ -16,8 +16,12 @@ import {
   Loader2,
   Calendar,
   Layers,
-  GraduationCap
+  GraduationCap,
+  Library,
+  BookOpen
 } from 'lucide-react';
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
 
 export default function CreateAssignment() {
   const router = useRouter();
@@ -40,9 +44,34 @@ export default function CreateAssignment() {
     { type: 'Short Answer Questions', count: 5, marks: 2 }
   ]);
 
+  // Library Integration State
+  const [libraryResources, setLibraryResources] = useState<any[]>([]);
+  const [selectedResourceId, setSelectedResourceId] = useState<string | null>(null);
+  const [useLibrary, setUseLibrary] = useState(false);
+  const [loadingLibrary, setLoadingLibrary] = useState(false);
+
   // UI drag/drop state
   const [dragActive, setDragActive] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
+
+  // Fetch library resources on mount
+  useEffect(() => {
+    const loadLibrary = async () => {
+      try {
+        setLoadingLibrary(true);
+        const res = await fetch(`${API_BASE}/api/resources`);
+        if (res.ok) {
+          const data = await res.json();
+          setLibraryResources(data);
+        }
+      } catch (err) {
+        console.error('Error fetching library in wizard:', err);
+      } finally {
+        setLoadingLibrary(false);
+      }
+    };
+    loadLibrary();
+  }, []);
 
   // File drop helpers
   const handleDrag = (e: React.DragEvent) => {
@@ -150,7 +179,9 @@ export default function CreateAssignment() {
 
     // Build Form Data for upload
     const formData = new FormData();
-    if (file) {
+    if (selectedResourceId) {
+      formData.append('resourceId', selectedResourceId);
+    } else if (file) {
       formData.append('file', file);
     }
     formData.append('title', title);
@@ -177,62 +208,150 @@ export default function CreateAssignment() {
               <p className="text-sm text-slate-500 mt-1">Upload study material, chapters, or reference texts to base the assessment questions on (Optional).</p>
             </div>
 
-            {/* Dropzone */}
-            <div 
-              onDragEnter={handleDrag}
-              onDragOver={handleDrag}
-              onDragLeave={handleDrag}
-              onDrop={handleDrop}
-              className={`border-2 border-dashed rounded-2xl p-8 text-center flex flex-col items-center justify-center min-h-[240px] transition-colors duration-200 cursor-pointer ${
-                dragActive 
-                  ? 'border-indigo-500 bg-indigo-50/30' 
-                  : 'border-[#E2E8F0] hover:border-indigo-300 hover:bg-slate-50/50'
-              }`}
-            >
-              <input
-                id="file-upload"
-                type="file"
-                accept=".pdf,.txt"
-                className="hidden"
-                onChange={handleFileChange}
-              />
-              
-              <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 mb-4 border border-slate-200">
-                <Upload size={20} />
-              </div>
-
-              <div className="space-y-1.5">
-                <p className="text-sm font-semibold text-slate-700">Choose a file or drag & drop it here</p>
-                <p className="text-xs text-slate-400">PDF, TXT up to 10MB</p>
-              </div>
-
-              <label
-                htmlFor="file-upload"
-                className="mt-6 inline-flex items-center justify-center px-4 py-2 bg-white border border-[#E2E8F0] hover:bg-slate-50 text-slate-700 rounded-xl text-sm font-semibold shadow-sm transition-colors cursor-pointer"
+            {/* Selector Tabs */}
+            <div className="flex border-b border-[#E2E8F0] gap-6">
+              <button
+                type="button"
+                onClick={() => { setUseLibrary(false); setSelectedResourceId(null); }}
+                className={`pb-2.5 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors ${
+                  !useLibrary
+                    ? 'border-[#FF5623] text-[#FF5623]'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
               >
-                Browse Files
-              </label>
+                Upload Reference File
+              </button>
+              <button
+                type="button"
+                onClick={() => { setUseLibrary(true); setFile(null); }}
+                className={`pb-2.5 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors ${
+                  useLibrary
+                    ? 'border-[#FF5623] text-[#FF5623]'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                Select from Library
+              </button>
             </div>
 
-            {/* Uploaded File Item */}
-            {file && (
-              <div className="flex items-center justify-between p-4 bg-indigo-50/40 border border-indigo-100 rounded-xl">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-indigo-100 flex items-center justify-center text-indigo-600">
-                    <File size={18} />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-slate-800 truncate max-w-[240px] sm:max-w-md">{file.name}</p>
-                    <p className="text-xs text-slate-400">{(file.size / (1024 * 1024)).toFixed(2)} MB</p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setFile(null)}
-                  className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"
+            {/* Render Upload File Zone */}
+            {!useLibrary && (
+              <>
+                {/* Dropzone */}
+                <div 
+                  onDragEnter={handleDrag}
+                  onDragOver={handleDrag}
+                  onDragLeave={handleDrag}
+                  onDrop={handleDrop}
+                  className={`border-2 border-dashed rounded-2xl p-8 text-center flex flex-col items-center justify-center min-h-[220px] transition-colors duration-200 cursor-pointer ${
+                    dragActive 
+                      ? 'border-indigo-500 bg-indigo-50/30' 
+                      : 'border-[#E2E8F0] hover:border-indigo-300 hover:bg-slate-50/50'
+                  }`}
                 >
-                  <Trash2 size={16} />
-                </button>
+                  <input
+                    id="file-upload"
+                    type="file"
+                    accept=".pdf,.txt"
+                    className="hidden"
+                    onChange={handleFileChange}
+                  />
+                  
+                  <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 mb-4 border border-slate-200">
+                    <Upload size={20} />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <p className="text-sm font-semibold text-slate-700">Choose a file or drag & drop it here</p>
+                    <p className="text-xs text-slate-400">PDF, TXT up to 10MB</p>
+                  </div>
+
+                  <label
+                    htmlFor="file-upload"
+                    className="mt-6 inline-flex items-center justify-center px-4 py-2 bg-white border border-[#E2E8F0] hover:bg-slate-50 text-slate-700 rounded-xl text-sm font-semibold shadow-sm transition-colors cursor-pointer"
+                  >
+                    Browse Files
+                  </label>
+                </div>
+
+                {/* Uploaded File Item */}
+                {file && (
+                  <div className="flex items-center justify-between p-4 bg-indigo-50/40 border border-indigo-100 rounded-xl">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-indigo-100 flex items-center justify-center text-indigo-650">
+                        <File size={18} />
+                      </div>
+                      <div className="text-left">
+                        <p className="text-sm font-semibold text-slate-800 truncate max-w-[240px] sm:max-w-md">{file.name}</p>
+                        <p className="text-xs text-slate-400">{(file.size / (1024 * 1024)).toFixed(2)} MB</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setFile(null)}
+                      className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Render Select from Library */}
+            {useLibrary && (
+              <div className="space-y-4">
+                {loadingLibrary ? (
+                  <div className="flex flex-col items-center justify-center p-8 bg-slate-50 border border-[#E2E8F0] rounded-2xl min-h-[220px]">
+                    <Loader2 className="animate-spin text-[#FF5623]" size={28} />
+                    <p className="text-xs text-slate-455 mt-3 font-semibold">Loading reference materials...</p>
+                  </div>
+                ) : libraryResources.length === 0 ? (
+                  <div className="text-center p-8 bg-slate-50 border border-dashed border-[#E2E8F0] rounded-2xl min-h-[220px] flex flex-col items-center justify-center">
+                    <Library className="text-slate-400 mb-2" size={24} />
+                    <p className="text-sm font-semibold text-slate-700">No resources in your library</p>
+                    <p className="text-xs text-slate-400 mt-1 max-w-xs leading-relaxed">Upload study materials in the "My Library" page first to select them here.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-3 max-h-[280px] overflow-y-auto pr-1 scrollbar-thin">
+                    {libraryResources.map((resItem) => (
+                      <div
+                        key={resItem._id}
+                        onClick={() => setSelectedResourceId(resItem._id)}
+                        className={`flex items-center justify-between p-3.5 border rounded-xl cursor-pointer transition-all duration-200 ${
+                          selectedResourceId === resItem._id
+                            ? 'border-[#FF5623] bg-amber-50/10 shadow-sm'
+                            : 'border-[#E2E8F0] hover:border-slate-350 hover:bg-slate-50/50'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className={`w-9 h-9 rounded-lg flex items-center justify-center border shrink-0 ${
+                            resItem.type === 'PDF'
+                              ? 'bg-rose-50 border-rose-100 text-rose-600'
+                              : 'bg-indigo-50 border-indigo-100 text-indigo-650'
+                          }`}>
+                            {resItem.type === 'PDF' ? <BookOpen size={16} /> : <File size={16} />}
+                          </div>
+                          <div className="text-left min-w-0">
+                            <p className="text-xs font-bold text-slate-800 truncate pr-2" title={resItem.title}>
+                              {resItem.title}
+                            </p>
+                            <p className="text-[10px] text-slate-450 mt-0.5 font-semibold">{resItem.subject} • {resItem.size}</p>
+                          </div>
+                        </div>
+                        <div className="shrink-0 flex items-center pr-1">
+                          <div className={`w-4.5 h-4.5 rounded-full border flex items-center justify-center transition-all ${
+                            selectedResourceId === resItem._id
+                              ? 'border-[#FF5623] bg-[#FF5623] text-white'
+                              : 'border-slate-300 bg-white'
+                          }`}>
+                            {selectedResourceId === resItem._id && <Check size={10} strokeWidth={3} />}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>

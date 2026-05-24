@@ -7,6 +7,7 @@ import dotenv from 'dotenv';
 import pdfParse from 'pdf-parse';
 import { connectDB } from './db';
 import { Assignment } from './models/Assignment';
+import { Resource } from './models/Resource';
 import { assessmentQueue, setupWorker } from './queue';
 
 // Load environment variables
@@ -63,7 +64,8 @@ app.post('/api/assignments', upload.single('file'), async (req, res) => {
       gradeClass,
       dueDate,
       additionalInstructions,
-      questionTypes: questionTypesRaw
+      questionTypes: questionTypesRaw,
+      resourceId
     } = req.body;
 
     if (!title || !subject || !gradeClass || !dueDate || !questionTypesRaw) {
@@ -84,9 +86,20 @@ app.post('/api/assignments', upload.single('file'), async (req, res) => {
        return;
     }
 
-    // Extract text from uploaded PDF / TXT file
+    // Extract text from uploaded PDF / TXT file OR use selected library resource
     let fileTextContext = '';
-    if (req.file) {
+    if (resourceId) {
+      const resource = await Resource.findById(resourceId);
+      if (resource) {
+        fileTextContext = resource.fileTextContext;
+        // Increment downloads
+        resource.downloads += 1;
+        await resource.save();
+      } else {
+         res.status(400).json({ error: 'Selected library resource not found' });
+         return;
+      }
+    } else if (req.file) {
       const mime = req.file.mimetype;
       if (mime === 'application/pdf') {
         const data = await pdfParse(req.file.buffer);
@@ -212,11 +225,146 @@ app.get('/api/assignments/:id/pdf', async (req, res) => {
   }
 });
 
+// --- RESOURCE LIBRARY DATA & HELPERS ---
+
+const mockResources = [
+  {
+    title: 'CBSE Grade 9 Chemistry Chapter 3: Atoms and Molecules Reference Notes',
+    type: 'PDF' as const,
+    size: '2.4 MB',
+    subject: 'Chemistry',
+    downloads: 48,
+    fileTextContext: 'Atoms and Molecules. Chemical reactions are governed by laws of chemical combination: Law of conservation of mass, Law of constant proportions. Dalton proposed atomic theory. Atom is the smallest unit of matter. Molecules are formed by combination of atoms. Molecular mass is calculated as sum of atomic masses.'
+  },
+  {
+    title: 'Biology Class 10: Cell Structure & Function Notes Summary',
+    type: 'PDF' as const,
+    size: '1.8 MB',
+    subject: 'Biology',
+    downloads: 32,
+    fileTextContext: 'Cell structure and function. The cell is the basic structural and functional unit of life. Cell membrane, nucleus, cytoplasm, organelles like mitochondria, ribosomes, endoplasmic reticulum, Golgi body, lysosomes. Mitosis and meiosis cell divisions.'
+  },
+  {
+    title: 'Grade 8 Science Term 1 Syllabus Guidelines',
+    type: 'Syllabus' as const,
+    size: '420 KB',
+    subject: 'General Science',
+    downloads: 15,
+    fileTextContext: 'Grade 8 Science Term 1 Syllabus covers Crop Production and Management, Microorganisms: Friend and Foe, Synthetic Fibres and Plastics, Materials: Metals and Non-Metals, Coal and Petroleum.'
+  },
+  {
+    title: 'Standard CBSE High School Exam Header Template Grid',
+    type: 'Exam Template' as const,
+    size: '12 KB',
+    subject: 'Templates',
+    downloads: 124,
+    fileTextContext: 'General Exam Header template: Name of School, Class, Subject, Time Allowed, Maximum Marks, Name, Roll No, Section, General Instructions.'
+  },
+  {
+    title: 'Physics Chapter 2: Force & Laws of Motion Reference Document',
+    type: 'TXT' as const,
+    size: '150 KB',
+    subject: 'Physics',
+    downloads: 27,
+    fileTextContext: 'Force and Laws of Motion. First law of motion: inertia. Second law of motion: F = ma. Third law of motion: action and reaction. Momentum conservation.'
+  }
+];
+
+// Seed library if empty
+async function seedLibrary() {
+  try {
+    const count = await Resource.countDocuments();
+    if (count === 0) {
+      console.log('Seeding mock resource library...');
+      await Resource.insertMany(mockResources);
+      console.log('Resource library seeded successfully!');
+    }
+  } catch (err) {
+    console.error('Error seeding library:', err);
+  }
+}
+
+// --- RESOURCE LIBRARY REST API ENDPOINTS ---
+
+// Fetch all resources
+app.get('/api/resources', async (req, res) => {
+  try {
+    const resources = await Resource.find().sort({ uploadedAt: -1 });
+    res.json(resources);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Upload a new resource to the library
+app.post('/api/resources', upload.single('file'), async (req, res) => {
+  try {
+    const { subject } = req.body;
+    
+    if (!req.file || !subject) {
+       res.status(400).json({ error: 'File and subject are required' });
+       return;
+    }
+
+    const mime = req.file.mimetype;
+    let fileTextContext = '';
+    let fileType: 'PDF' | 'TXT' = 'TXT';
+
+    if (mime === 'application/pdf') {
+      const data = await pdfParse(req.file.buffer);
+      fileTextContext = data.text;
+      fileType = 'PDF';
+    } else if (mime.startsWith('text/')) {
+      fileTextContext = req.file.buffer.toString('utf-8');
+      fileType = 'TXT';
+    } else {
+       res.status(400).json({ error: 'Unsupported file type. Only PDF and text files are supported.' });
+       return;
+    }
+
+    // Format file size
+    const kb = req.file.size / 1024;
+    const sizeStr = kb > 1024 
+      ? `${(kb / 1024).toFixed(1)} MB` 
+      : `${Math.round(kb)} KB`;
+
+    const resource = new Resource({
+      title: req.file.originalname,
+      type: fileType,
+      size: sizeStr,
+      subject,
+      downloads: 0,
+      fileTextContext
+    });
+
+    await resource.save();
+    res.status(201).json(resource);
+  } catch (error: any) {
+    console.error('Error uploading resource:', error);
+    res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+});
+
+// Delete a resource from the library
+app.delete('/api/resources/:id', async (req, res) => {
+  try {
+    const resource = await Resource.findByIdAndDelete(req.params.id);
+    if (!resource) {
+       res.status(404).json({ error: 'Resource not found' });
+       return;
+    }
+    res.json({ message: 'Resource deleted successfully' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Connect database and start server
 const PORT = process.env.PORT || 5001;
 
 async function startServer() {
   await connectDB();
+  await seedLibrary();
   server.listen(PORT, () => {
     console.log(`VedaAI Backend Server running on port ${PORT}`);
   });

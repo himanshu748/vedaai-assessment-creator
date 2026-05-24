@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import DashboardLayout from '../../components/DashboardLayout';
 import { 
   Library, 
@@ -12,81 +12,147 @@ import {
   Trash2, 
   Plus, 
   FileCheck,
-  ChevronRight,
-  Filter
+  Filter,
+  Loader2,
+  AlertCircle
 } from 'lucide-react';
 
 interface LibraryItem {
-  id: string;
+  _id: string;
   title: string;
   type: 'PDF' | 'TXT' | 'Syllabus' | 'Exam Template';
   size: string;
   uploadedAt: string;
   subject: string;
   downloads: number;
+  fileTextContext: string;
 }
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
 
 export default function LibraryPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSubject, setSelectedSubject] = useState('All');
+  const [libraryItems, setLibraryItems] = useState<LibraryItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Premium mock library resources
-  const [libraryItems, setLibraryItems] = useState<LibraryItem[]>([
-    {
-      id: 'lib-1',
-      title: 'CBSE Grade 9 Chemistry Chapter 3: Atoms and Molecules',
-      type: 'PDF',
-      size: '2.4 MB',
-      uploadedAt: 'May 23, 2026',
-      subject: 'Chemistry',
-      downloads: 48
-    },
-    {
-      id: 'lib-2',
-      title: 'Biology Class 10: Cell Structure & Function Notes',
-      type: 'PDF',
-      size: '1.8 MB',
-      uploadedAt: 'May 20, 2026',
-      subject: 'Biology',
-      downloads: 32
-    },
-    {
-      id: 'lib-3',
-      title: 'Grade 8 Science Term 1 Syllabus Guide',
-      type: 'Syllabus',
-      size: '420 KB',
-      uploadedAt: 'May 18, 2026',
-      subject: 'General Science',
-      downloads: 15
-    },
-    {
-      id: 'lib-4',
-      title: 'Standard CBSE High School Exam Header Template',
-      type: 'Exam Template',
-      size: '12 KB',
-      uploadedAt: 'May 12, 2026',
-      subject: 'Templates',
-      downloads: 124
-    },
-    {
-      id: 'lib-5',
-      title: 'Physics Chapter 2: Force & Laws of Motion Reference',
-      type: 'TXT',
-      size: '150 KB',
-      uploadedAt: 'May 10, 2026',
-      subject: 'Physics',
-      downloads: 27
-    }
-  ]);
-
-  const handleDelete = (id: string) => {
-    if (confirm('Are you sure you want to delete this resource from the library?')) {
-      setLibraryItems(libraryItems.filter(item => item.id !== id));
+  // Fetch resources from backend
+  const fetchResources = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const res = await fetch(`${API_BASE}/api/resources`);
+      if (!res.ok) {
+        throw new Error('Failed to fetch resource library items');
+      }
+      const data = await res.json();
+      setLibraryItems(data);
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || 'An error occurred while loading the library.');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleDownload = (title: string) => {
-    alert(`Downloading "${title}" reference file...`);
+  useEffect(() => {
+    fetchResources();
+  }, []);
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this resource from the library?')) {
+      return;
+    }
+    try {
+      const res = await fetch(`${API_BASE}/api/resources/${id}`, {
+        method: 'DELETE'
+      });
+      if (!res.ok) {
+        throw new Error('Failed to delete resource');
+      }
+      setLibraryItems(prev => prev.filter(item => item._id !== id));
+    } catch (err: any) {
+      alert(err.message || 'Error deleting resource');
+    }
+  };
+
+  const handleDownload = (item: LibraryItem) => {
+    try {
+      // Generate a downloadable Blob from the text context
+      const blob = new Blob([item.fileTextContext], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      // Use original filename or title with .txt suffix
+      const filename = item.title.endsWith('.pdf') || item.title.endsWith('.txt') 
+        ? item.title 
+        : `${item.title}.txt`;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert('Failed to download resource context');
+    }
+  };
+
+  const handleUploadClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const file = files[0];
+    // Simple validation
+    const mime = file.type;
+    if (mime !== 'application/pdf' && !mime.startsWith('text/') && !file.name.endsWith('.pdf') && !file.name.endsWith('.txt')) {
+      alert('Unsupported file type. Only PDF and text files are supported.');
+      return;
+    }
+
+    const subject = prompt(
+      `Enter the subject/category for "${file.name}" (e.g. Chemistry, Biology, Physics, General Science, Templates):`,
+      'Chemistry'
+    );
+
+    if (subject === null) return; // Cancelled
+    if (!subject.trim()) {
+      alert('Subject is required to upload a resource.');
+      return;
+    }
+
+    try {
+      setUploading(true);
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('subject', subject.trim());
+
+      const res = await fetch(`${API_BASE}/api/resources`, {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Failed to upload resource');
+      }
+
+      const newResource = await res.json();
+      setLibraryItems(prev => [newResource, ...prev]);
+      alert('Resource uploaded successfully to the library!');
+    } catch (err: any) {
+      alert(err.message || 'Error uploading resource');
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
   };
 
   const filteredItems = libraryItems.filter(item => {
@@ -104,15 +170,34 @@ export default function LibraryPage() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Resource Library</h1>
+            <h1 className="text-2xl font-bold text-slate-800 tracking-tight">My Library</h1>
             <p className="text-sm text-slate-500 mt-1">Manage study materials, syllabus plans, and reference texts used for assessment generation.</p>
           </div>
+          
+          <input 
+            type="file" 
+            ref={fileInputRef} 
+            onChange={handleFileChange}
+            accept=".pdf,.txt"
+            className="hidden"
+          />
+
           <button 
-            onClick={() => alert('File upload dialog opened!')}
-            className="inline-flex items-center gap-1.5 px-4.5 py-2.5 bg-[#FF5623] hover:bg-[#E04B1E] text-white rounded-xl text-sm font-semibold transition-all duration-200 shadow-sm shadow-[#FF5623]/10 active:scale-[0.98]"
+            onClick={handleUploadClick}
+            disabled={uploading}
+            className="inline-flex items-center gap-1.5 px-4.5 py-2.5 bg-[#FF5623] hover:bg-[#E04B1E] disabled:bg-slate-350 text-white rounded-xl text-sm font-semibold transition-all duration-200 shadow-sm shadow-[#FF5623]/10 active:scale-[0.98]"
           >
-            <Plus size={16} />
-            Upload Resource
+            {uploading ? (
+              <>
+                <Loader2 size={16} className="animate-spin" />
+                <span>Uploading...</span>
+              </>
+            ) : (
+              <>
+                <Plus size={16} />
+                <span>Upload Resource</span>
+              </>
+            )}
           </button>
         </div>
 
@@ -147,13 +232,30 @@ export default function LibraryPage() {
           </div>
         </div>
 
-        {/* Resources Grid */}
-        {filteredItems.length > 0 ? (
+        {/* Loading and Error states */}
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-20 bg-white border border-[#E2E8F0] rounded-3xl">
+            <Loader2 size={36} className="text-[#FF5623] animate-spin" />
+            <p className="text-sm font-semibold text-slate-500 mt-4">Loading library items...</p>
+          </div>
+        ) : error ? (
+          <div className="flex flex-col items-center justify-center p-8 bg-rose-50 border border-rose-100 rounded-3xl text-center max-w-md mx-auto">
+            <AlertCircle size={36} className="text-rose-500" />
+            <h3 className="text-base font-bold text-slate-800 mt-4">Failed to load library</h3>
+            <p className="text-xs text-slate-550 mt-1.5">{error}</p>
+            <button 
+              onClick={fetchResources}
+              className="mt-5 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition-all"
+            >
+              Retry
+            </button>
+          </div>
+        ) : filteredItems.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {filteredItems.map(item => (
               <div 
-                key={item.id} 
-                className="bg-white border border-[#E2E8F0] rounded-2xl p-5 hover:border-slate-300 hover:shadow-md transition-all duration-200 flex flex-col justify-between"
+                key={item._id} 
+                className="bg-white border border-[#E2E8F0] rounded-2xl p-5 hover:border-slate-350 hover:shadow-md transition-all duration-200 flex flex-col justify-between"
               >
                 <div className="flex items-start gap-4">
                   <div className={`w-12 h-12 rounded-xl flex items-center justify-center border shrink-0 ${
@@ -175,11 +277,17 @@ export default function LibraryPage() {
                         {item.type}
                       </span>
                     </div>
-                    <h3 className="text-sm font-bold text-slate-800 line-clamp-1 leading-snug">{item.title}</h3>
+                    <h3 className="text-sm font-bold text-slate-800 line-clamp-1 leading-snug" title={item.title}>
+                      {item.title}
+                    </h3>
                     <div className="flex items-center gap-4 text-xs text-slate-400">
                       <span className="flex items-center gap-1">
                         <Clock size={12} />
-                        {item.uploadedAt}
+                        {new Date(item.uploadedAt).toLocaleDateString(undefined, { 
+                          year: 'numeric', 
+                          month: 'short', 
+                          day: 'numeric' 
+                        })}
                       </span>
                       <span>{item.size}</span>
                     </div>
@@ -194,15 +302,15 @@ export default function LibraryPage() {
                   
                   <div className="flex items-center gap-1.5">
                     <button
-                      onClick={() => handleDownload(item.title)}
-                      className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-50 rounded-lg transition-colors border border-transparent hover:border-slate-100"
-                      title="Download reference"
+                      onClick={() => handleDownload(item)}
+                      className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-50 rounded-lg transition-colors border border-transparent hover:border-slate-100 cursor-pointer"
+                      title="Download reference context"
                     >
                       <Download size={15} />
                     </button>
                     <button
-                      onClick={() => handleDelete(item.id)}
-                      className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors border border-transparent hover:border-rose-100"
+                      onClick={() => handleDelete(item._id)}
+                      className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors border border-transparent hover:border-rose-100 cursor-pointer"
                       title="Delete reference"
                     >
                       <Trash2 size={15} />
