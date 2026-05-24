@@ -1,0 +1,36 @@
+# Node modules
+node_modules/
+**/node_modules/
+
+# Next.js build outputs
+.next/
+**/.next/
+out/
+
+# TypeScript build outputs
+dist/
+**/dist/
+
+# Env files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+**/.env
+**/.env.local
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test outputs
+*.pdf
+backend/test_exam_paper.pdf
+
+# Figma research files
+figma_nodes.txt
+figma_images/
+get_figma.js
+analyze_nodes.js
+export_figma_images.js

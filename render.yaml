@@ -1,0 +1,46 @@
+services:
+  # 1. Redis instance for BullMQ background jobs
+  - type: redis
+    name: vedaai-redis
+    plan: free
+    ipAllowList: [] # Restrict access to internal Render services only
+
+  # 2. Express Backend API and Worker Service
+  - type: web
+    name: vedaai-backend
+    env: node
+    plan: free
+    rootDir: backend
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: vedaai-redis
+          property: connectionString
+      - key: MONGODB_URI
+        sync: false # Render will prompt you for your MongoDB Atlas connection string
+        placeholder: "mongodb+srv://<username>:<password>@cluster0.xxxx.mongodb.net/vedaai"
+      - key: HF_TOKEN
+        sync: false # Render will prompt you for your Hugging Face API key
+        placeholder: "hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+  # 3. Next.js Frontend Web Service
+  - type: web
+    name: vedaai-frontend
+    env: node
+    plan: free
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: PORT
+        value: 3000
+      - key: NEXT_PUBLIC_API_URL
+        fromService:
+          type: web
+          name: vedaai-backend
+          property: url
