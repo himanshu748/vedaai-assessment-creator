@@ -14,11 +14,20 @@ import {
   Clock,
   Loader2,
   AlertCircle,
-  CheckCircle2
+  CheckCircle2,
+  Trash2
 } from 'lucide-react';
 
 export default function DashboardHome() {
-  const { assignments, loading, error, fetchAssignments } = useAssignmentStore();
+  const { assignments, loading, error, fetchAssignments, deleteAssignment } = useAssignmentStore();
+
+  const handleDelete = async (e: React.MouseEvent, id: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (confirm('Are you sure you want to delete this assignment?')) {
+      await deleteAssignment(id);
+    }
+  };
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
@@ -173,7 +182,16 @@ export default function DashboardHome() {
                       </h3>
                       <p className="text-xs text-slate-400">Class: {assignment.gradeClass}</p>
                     </div>
-                    {getStatusBadge(assignment.status)}
+                    <div className="flex flex-col items-end gap-2 shrink-0">
+                      {getStatusBadge(assignment.status)}
+                      <button
+                        onClick={(e) => handleDelete(e, assignment._id)}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors duration-150"
+                        title="Delete assignment"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4 border-t border-[#F1F5F9] pt-4 text-xs font-medium text-slate-500">

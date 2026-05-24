@@ -51,6 +51,7 @@ interface AssignmentState {
   fetchAssignmentDetails: (id: string) => Promise<IAssignment | null>;
   createAssignment: (formData: FormData) => Promise<IAssignment | null>;
   regenerateAssignment: (id: string) => Promise<void>;
+  deleteAssignment: (id: string) => Promise<boolean>;
   updateAssignmentStatus: (id: string, status: IAssignment['status'], step: string) => void;
   clearCurrentAssignment: () => void;
 }
@@ -146,6 +147,27 @@ export const useAssignmentStore = create<AssignmentState>((set, get) => ({
       });
     } catch (err: any) {
       set({ error: err.message || 'Something went wrong', isGenerating: false });
+    }
+  },
+
+  deleteAssignment: async (id: string) => {
+    set({ loading: true, error: null });
+    try {
+      const response = await fetch(`${API_BASE}/api/assignments/${id}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) {
+        throw new Error('Failed to delete assignment');
+      }
+      set((state) => ({
+        assignments: state.assignments.filter((a) => a._id !== id),
+        currentAssignment: state.currentAssignment?._id === id ? null : state.currentAssignment,
+        loading: false
+      }));
+      return true;
+    } catch (err: any) {
+      set({ error: err.message || 'Something went wrong', loading: false });
+      return false;
     }
   },
 

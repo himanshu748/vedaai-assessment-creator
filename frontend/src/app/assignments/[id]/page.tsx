@@ -17,7 +17,8 @@ import {
   CheckSquare, 
   HelpCircle,
   Clock,
-  Award
+  Award,
+  Trash2
 } from 'lucide-react';
 
 export default function AssignmentOutput({ params }: { params: Promise<{ id: string }> }) {
@@ -39,7 +40,8 @@ export default function AssignmentOutput({ params }: { params: Promise<{ id: str
     isGenerating, 
     generationStep, 
     fetchAssignmentDetails, 
-    regenerateAssignment 
+    regenerateAssignment,
+    deleteAssignment
   } = useAssignmentStore();
 
   // Socket connection hook
@@ -178,6 +180,17 @@ export default function AssignmentOutput({ params }: { params: Promise<{ id: str
     }
   };
 
+  const handleDelete = async () => {
+    if (currentAssignment && window.confirm('Are you sure you want to delete this assignment? This cannot be undone.')) {
+      const success = await deleteAssignment(currentAssignment._id);
+      if (success) {
+        router.push('/');
+      } else {
+        alert('Failed to delete assignment');
+      }
+    }
+  };
+
   const handleDownloadPDF = async () => {
     if (!currentAssignment) return;
     setIsDownloading(true);
@@ -228,6 +241,13 @@ export default function AssignmentOutput({ params }: { params: Promise<{ id: str
         </button>
 
         <div className="flex items-center gap-3">
+          <button
+            onClick={handleDelete}
+            className="inline-flex items-center gap-1.5 px-4 py-2 bg-rose-50 border border-rose-200 hover:bg-rose-100 text-rose-700 rounded-xl text-sm font-semibold transition-all duration-200 shadow-sm active:scale-[0.98]"
+          >
+            <Trash2 size={14} />
+            Delete
+          </button>
           <button
             onClick={handleRegenerate}
             className="inline-flex items-center gap-1.5 px-4 py-2 bg-white border border-[#E2E8F0] hover:bg-slate-50 text-slate-700 rounded-xl text-sm font-semibold transition-all duration-200 shadow-sm active:scale-[0.98]"

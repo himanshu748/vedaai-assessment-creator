@@ -225,6 +225,21 @@ app.get('/api/assignments/:id/pdf', async (req, res) => {
   }
 });
 
+// Delete an assignment
+app.delete('/api/assignments/:id', async (req, res) => {
+  try {
+    const assignment = await Assignment.findByIdAndDelete(req.params.id);
+    if (!assignment) {
+      res.status(404).json({ error: 'Assignment not found' });
+      return;
+    }
+    res.json({ message: 'Assignment deleted successfully' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
 // --- RESOURCE LIBRARY DATA & HELPERS ---
 
 const mockResources = [
