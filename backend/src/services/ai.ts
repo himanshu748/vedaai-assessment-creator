@@ -13,7 +13,7 @@ export async function generateQuestionPaper(params: {
 }): Promise<ISection[]> {
   const hfToken = process.env.HF_TOKEN || '';
   const model = 'meta-llama/Meta-Llama-3-8B-Instruct';
-  const url = `https://api-inference.huggingface.co/models/${model}`;
+  const url = `https://router.huggingface.co/models/${model}`;
 
   // Build the list of question types requested
   const typesDescription = params.questionTypes
