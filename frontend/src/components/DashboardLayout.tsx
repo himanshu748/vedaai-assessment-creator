@@ -22,8 +22,8 @@ interface SidebarItem {
 const sidebarItems: SidebarItem[] = [
   { name: 'Home', href: '/', icon: Home },
   { name: 'Assignments', href: '/assignments', icon: FileText },
-  { name: 'Library', href: '#', icon: Library },
-  { name: 'AI Toolkit', href: '#', icon: Wand2 },
+  { name: 'Library', href: '/library', icon: Library },
+  { name: 'AI Toolkit', href: '/ai-toolkit', icon: Wand2 },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
