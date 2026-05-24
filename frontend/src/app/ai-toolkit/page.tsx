@@ -140,7 +140,9 @@ export default function AIToolkitPage() {
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1">
                   <span>Hugging Face LLM Model</span>
-                  <HelpCircle size={12} className="text-slate-400 cursor-pointer" title="LLM model used for serverless inference" />
+                  <span title="LLM model used for serverless inference" className="inline-flex items-center">
+                    <HelpCircle size={12} className="text-slate-400 cursor-pointer" />
+                  </span>
                 </label>
                 <select
                   value={model}
@@ -158,7 +160,9 @@ export default function AIToolkitPage() {
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1">
                     <span>Temperature</span>
-                    <HelpCircle size={12} className="text-slate-400 cursor-pointer" title="Higher values make output more creative, lower values more deterministic" />
+                    <span title="Higher values make output more creative, lower values more deterministic" className="inline-flex items-center">
+                      <HelpCircle size={12} className="text-slate-400 cursor-pointer" />
+                    </span>
                   </label>
                   <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">{temperature}</span>
                 </div>
@@ -181,7 +185,9 @@ export default function AIToolkitPage() {
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1">
                   <span>Max Tokens</span>
-                  <HelpCircle size={12} className="text-slate-400 cursor-pointer" title="Max tokens allowed for LLM response generation" />
+                  <span title="Max tokens allowed for LLM response generation" className="inline-flex items-center">
+                    <HelpCircle size={12} className="text-slate-400 cursor-pointer" />
+                  </span>
                 </label>
                 <input
                   type="number"
